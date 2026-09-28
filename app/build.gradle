@@ -18,8 +18,8 @@ android {
         applicationId "com.xhy.xp.softaphelper"
         minSdk 23
         targetSdk 36
-        versionCode 1202
-        versionName "1.202"
+        versionCode 1203
+        versionName "1.203"
     }
 
     signingConfigs {
