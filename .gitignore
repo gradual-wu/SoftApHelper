@@ -17,3 +17,6 @@ local.properties
 gradlew.bat
 gradlew
 app/release
+# release 签名（不要提交）
+keystore/
+keystore.properties
