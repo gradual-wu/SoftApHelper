@@ -13,6 +13,7 @@ SoftAp IPv6 tethering off for Android 9-16
 2. 隐藏热点类型 (Android 10-16)
 3. 锁定5G信道和频宽 (Android 13-16)
 4. 关闭IPv6中继 (Android 9-16)
+5. 开机自动开启共享 (Android 11-16)
 
 ## 务必先确认作用域（Android 12+ 必看）
 模块的`xposed_init`/`xposedscope`只是**推荐**作用域，**不会自动生效**。
@@ -158,6 +159,45 @@ IPv4 完全不受影响。
   启动失败会自动重试，最多 4 次
 - **需要作用域勾选「系统框架」**，因为这段代码跑在 system_server 里；没勾就退化成"需要手动开关一次"
 - 重启共享会让已连接设备短暂断开（约 5 秒）
+
+### 开机自动开启
+每个共享方式的配置页里都有一个**开机自动开启**开关（默认关闭）。打开后设备每次开机完成时，
+模块会自动把这种共享打开，不用自己去点快捷开关；主界面的按钮上会在网段后面标一个「开机自启」。
+
+- 关机前这种共享是开是关都不影响：只看这个开关和「开机」这个时机
+- 检测到开机完成后**等 5 秒**再开（这时 Wi-Fi / Tethering 还在初始化，早开会被拒），
+  开不起来每 5 秒重试一次，最多约 2 分钟
+- 只对**正在跑的共享**做判断，已经开着的类型直接跳过
+- 需要 **Android 11+**（`TetheringManager` 从 Android 11 起才有），而且和「保存后自动重启共享」
+  一样**需要作用域勾选「系统框架」**——这段代码跑在 system_server 里，没勾就不会有任何反应
+
+实现上：system_server 里动态注册 `BOOT_COMPLETED` 接收器，另外每 10 秒看一眼
+`sys.boot_completed` 兜底（万一某个 ROM 不让动态注册的接收器收系统保护广播，或者模块加载得比
+广播还晚），两者靠一个标志位保证只生效一次；然后按类型调 `TetheringManager.startTethering`——
+Android 14+ 用带回调的 `TetheringRequest` 版本，11~13 只有 SystemApi 的
+`startTethering(int, Executor, StartTetheringCallback)`（公开 SDK 里没有，模块用反射调，
+Android 14 起它已被标记废弃）。
+
+日志（system_server 里）：
+
+```
+[SoftApHelper] [Boot]: detected by sys.boot_completed, auto start in 5s.
+[SoftApHelper] [Boot]: auto start tethering, type 0 ...
+[SoftApHelper] [Success]: tethering started (type 0).
+```
+
+第一行里的 `detected by` 会写清楚这次是开机广播还是兜底轮询发现的（`BOOT_COMPLETED` / `sys.boot_completed`）。
+
+**实测**（OnePlus 8T / LineageOS 23，Android 16）：`sys.boot_completed` 在开机约 15 秒时就能读到，
+而 `BOOT_COMPLETED` 广播要再晚 **40 秒左右**才送到（`[Boot]: BOOT_COMPLETED received.` 出现在热点起来之后
+是正常的，此时它已经不需要做什么了）。所以真正干活的基本都是兜底轮询，开机广播是道保险——
+`sys.boot_completed` 万一读不到（或者模块加载得比它还晚），还有广播这条路。
+
+没生效时先看有没有 `[Boot]` 这行：没有的话说明开机广播/兜底检查没跑到（多半是作用域没勾
+「系统框架」，或者这个共享方式的开关没打开）；有 `[Boot]` 但后面是 `[Error]`，把错误码和日志一起提 issue。
+
+顺带一提，system_server 自己重启（不是整机重启）时 `sys.boot_completed` 还是 1，模块会按
+「开机」处理把共享重新打开。
 
 ## 下载
 [Release](https://github.com/XhyEax/SoftApHelper/releases)

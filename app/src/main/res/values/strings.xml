@@ -32,6 +32,12 @@
     <string name="ipv6_relay_hint">关闭后不再把上游的 IPv6 前缀下发给客户端（RA 里不带前缀和默认路由，IPv6 转发规则也会清掉），客户端只剩 IPv4，适合代理不支持 IPv6 的场景。注意：上游是 IPv6-only（464XLAT）时关掉会让客户端没网。</string>
     <string name="ipv6_relay_summary_disabled">IPv6 中继已关闭</string>
 
+    <string name="config_label_auto_start">开机自动开启</string>
+    <string name="auto_start_switch">开机后自动打开这种共享</string>
+    <string name="auto_start_hint">打开后，设备每次开机完成后几秒，模块会自动把这种共享打开，起不来会重试几分钟；关机前它是开是关都不影响。\n只对 Android 11 及以上生效，且需要作用域勾选「系统框架」，日志里会有 [Boot] 记录。</string>
+    <string name="auto_start_summary_enabled">开机自动开启已打开</string>
+    <string name="auto_start_badge">开机自启</string>
+
     <string name="config_footer">注意：不要和其它网络的网段冲突，否则共享会连接失败（日志里会提示 isConflictPrefix）。信道列表是标准信道，设备不支持的信道会导致热点起不来，换一个即可。</string>
 
     <string name="conflict_with_type">网段冲突：和「%1$s」（%2$s）重叠，请换一个网段</string>

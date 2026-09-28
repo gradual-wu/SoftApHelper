@@ -47,6 +47,7 @@ public class AppSettings {
     public static final int IPV6_RELAY_DISABLED = 1;
 
     private static final String KEY_PREFIX = "address_";
+    private static final String KEY_AUTO_START_PREFIX = "auto_start_";
     public static final String KEY_WIFI_BAND = "wifi_band";
     public static final String KEY_WIFI_CHANNEL = "wifi_channel";
     private static final String KEY_IPV6_RELAY_PREFIX = "ipv6_relay_";
@@ -167,6 +168,25 @@ public class AppSettings {
 
     public static String ipv6RelayKey(int type) {
         return KEY_IPV6_RELAY_PREFIX + type;
+    }
+
+    // ---------------- 开机自动开启 ----------------
+
+    /** 这个共享方式是不是设置了开机自动开启，默认关闭。 */
+    public static boolean isAutoStart(Context context, int type) {
+        try {
+            return preferences(context).getBoolean(autoStartKey(type), false);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    public static void setAutoStart(Context context, int type, boolean enabled) {
+        preferences(context).edit().putBoolean(autoStartKey(type), enabled).apply();
+    }
+
+    public static String autoStartKey(int type) {
+        return KEY_AUTO_START_PREFIX + type;
     }
 
     /** 某个频段可选的信道；双频/跟随系统没有可选信道。 */

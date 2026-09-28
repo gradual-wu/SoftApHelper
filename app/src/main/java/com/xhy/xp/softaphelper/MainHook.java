@@ -71,12 +71,12 @@ public class MainHook implements IXposedHookLoadPackage {
     }
 
     /**
-     * 读界面里保存的配置。
+     * 读界面里保存的配置（{@link TetheringRestarter} 也用它读「开机自动开启」的开关）。
      *
      * <p>每次调用都 reload()：文件变了（用户在界面里保存过）下次开热点就用新值，
      * 不用等进程重启。reload() 内部先 stat 比对时间戳，没变就不会重新解析。
      */
-    private static XSharedPreferences preferences() {
+    static XSharedPreferences preferences() {
         XSharedPreferences preferences = sPreferences;
         if (preferences == null) {
             preferences = new XSharedPreferences(

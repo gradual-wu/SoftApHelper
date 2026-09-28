@@ -53,10 +53,13 @@ public class MainActivity extends Activity {
         return button;
     }
 
-    /** 按钮上是两行：第一行是名字，第二行小一号、灰色，显示当前网段。 */
+    /** 按钮上是两行：第一行是名字，第二行小一号、灰色，显示当前网段（开了开机自启的话再跟一个标记）。 */
     private SpannableString buildButtonText(int type) {
         String title = getString(AppSettings.titleRes(type));
         String address = AppSettings.getAddress(this, type);
+        if (AppSettings.isAutoStart(this, type)) {
+            address += " · " + getString(R.string.auto_start_badge);
+        }
         String text = title + "\n" + address;
         SpannableString spannable = new SpannableString(text);
         int start = title.length() + 1;

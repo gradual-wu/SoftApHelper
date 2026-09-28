@@ -17,6 +17,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
+import android.widget.Switch;
 import android.widget.TextView;
 
 import java.net.Inet4Address;
@@ -24,7 +25,7 @@ import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 
-/** 单个共享方式的网段配置界面；WiFi 热点额外可以配频段和信道。 */
+/** 单个共享方式的配置界面：网段、IPv6 中继、开机自动开启；WiFi 热点额外可以配频段和信道。 */
 public class ConfigActivity extends Activity {
 
     public static final String EXTRA_TETHERING_TYPE = "tethering_type";
@@ -55,6 +56,7 @@ public class ConfigActivity extends Activity {
     private EditText addressInput;
     private TextView statusText;
     private Spinner ipv6RelaySpinner;
+    private Switch autoStartSwitch;
 
     private LinearLayout bandGroup;
     private Spinner bandSpinner;
@@ -91,6 +93,7 @@ public class ConfigActivity extends Activity {
 
         setupBandControls();
         setupIpv6Relay();
+        setupAutoStart();
     }
 
     // ---------------- IPv6 中继（每种共享方式都能配） ----------------
@@ -119,6 +122,20 @@ public class ConfigActivity extends Activity {
         AppSettings.setIpv6Relay(this, tetheringType, mode);
         return mode == AppSettings.IPV6_RELAY_DISABLED
                 ? getString(R.string.ipv6_relay_summary_disabled) : null;
+    }
+
+    // ---------------- 开机自动开启（每种共享方式都能配） ----------------
+
+    private void setupAutoStart() {
+        autoStartSwitch = findViewById(R.id.auto_start_switch);
+        autoStartSwitch.setChecked(AppSettings.isAutoStart(this, tetheringType));
+    }
+
+    /** 保存开机自动开启，返回给人看的摘要（没打开返回 null）。 */
+    private String saveAutoStart() {
+        boolean enabled = autoStartSwitch.isChecked();
+        AppSettings.setAutoStart(this, tetheringType, enabled);
+        return enabled ? getString(R.string.auto_start_summary_enabled) : null;
     }
 
     // ---------------- 频段 / 信道（只有 WiFi 热点有） ----------------
@@ -313,10 +330,12 @@ public class ConfigActivity extends Activity {
 
         String bandSummary;
         String ipv6Summary;
+        String autoStartSummary;
         try {
             AppSettings.setAddress(this, tetheringType, normalized);
             bandSummary = saveBandSettings();
             ipv6Summary = saveIpv6Relay();
+            autoStartSummary = saveAutoStart();
         } catch (Throwable throwable) {
             showStatus("保存失败：" + throwable, true);
             return;
@@ -328,6 +347,7 @@ public class ConfigActivity extends Activity {
         StringBuilder summaryBuilder = new StringBuilder(normalized);
         if (bandSummary != null) summaryBuilder.append("，").append(bandSummary);
         if (ipv6Summary != null) summaryBuilder.append("，").append(ipv6Summary);
+        if (autoStartSummary != null) summaryBuilder.append("，").append(autoStartSummary);
         String summary = summaryBuilder.toString();
 
         // 请 system_server 里的模块代码把对应的共享关掉再打开一次，新配置立刻生效
