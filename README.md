@@ -77,6 +77,11 @@ LSPosed-模块-SoftApHelper-长按Tethering-重新优化-重启手机
 - 格式是 `地址/前缀长度`，例如 `192.168.43.1/24`；只填 IP 时按 `/24` 处理
 - 填的是**共享后本机自己的地址**（对端看到的网关），不是网段号；`192.168.43.0/24` 这种网络地址和广播地址会被拒绝
 - 前缀长度 1~30
+- **保存前会检查网段冲突**，重叠时直接拦截、红字提示和谁冲突了，不写进配置：
+  - 和其它共享方式已配置的网段（例如把 USB 的网段填给了 WiFi）
+  - 和设备当前在用的网络（Wi-Fi / 移动数据 / VPN / 正在跑的热点），例如手机连着 `192.168.3.0/24` 的 Wi-Fi 时热点不能再配成这个网段
+
+  前缀冲突会让共享连不上（Tethering 自己也会拒绝，日志里的 `isConflictPrefix`），所以在界面上提前拦住。
 - 配置存在模块的 SharedPreferences 里（框架的 `xposedsharedprefs` 机制），所以 manifest 里必须有 `<meta-data android:name="xposedsharedprefs" android:value="true"/>`
 
 ### WiFi 热点的频段和信道

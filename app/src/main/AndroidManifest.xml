@@ -8,6 +8,9 @@
 
     <uses-permission android:name="com.xhy.xp.softaphelper.permission.RESTART_TETHERING" />
 
+    <!-- 保存网段前检查是否和现有网络冲突 -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <queries>
         <package android:name="com.android.networkstack.tethering.inprocess" />
         <package android:name="com.android.networkstack.tethering" />

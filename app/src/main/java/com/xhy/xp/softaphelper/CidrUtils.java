@@ -82,6 +82,42 @@ public class CidrUtils {
         return slash < 0 ? cidr : cidr.substring(0, slash);
     }
 
+    /** 网段地址（主机位清零）：{@code 192.168.43.1/24 → 192.168.43.0/24}。 */
+    public static String networkCidr(String cidr) {
+        String normalized = normalize(cidr);
+        if (normalized == null) return null;
+        int prefixLength = prefixLength(normalized);
+        int network = address(normalized) & mask(prefixLength);
+        return (network >>> 24) + "." + ((network >>> 16) & 0xff) + "."
+                + ((network >>> 8) & 0xff) + "." + (network & 0xff) + "/" + prefixLength;
+    }
+
+    /**
+     * 两个网段是否重叠。
+     *
+     * <p>按较短的那个前缀取掩码再比网络号，例如 {@code 192.168.43.1/24} 和
+     * {@code 192.168.43.128/25} 算重叠。
+     */
+    public static boolean overlaps(String cidrA, String cidrB) {
+        String a = normalize(cidrA);
+        String b = normalize(cidrB);
+        if (a == null || b == null) return false;
+        int mask = mask(Math.min(prefixLength(a), prefixLength(b)));
+        return (address(a) & mask) == (address(b) & mask);
+    }
+
+    private static int prefixLength(String cidr) {
+        return Integer.parseInt(cidr.substring(cidr.indexOf('/') + 1));
+    }
+
+    private static int address(String cidr) {
+        return toInt(parseIpv4(hostPart(cidr)));
+    }
+
+    private static int mask(int prefixLength) {
+        return prefixLength == 0 ? 0 : (-1 << (32 - prefixLength));
+    }
+
     private static int[] parseIpv4(String address) {
         Matcher matcher = IPV4.matcher(address);
         if (!matcher.matches()) return null;

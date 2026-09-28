@@ -3,6 +3,11 @@ package com.xhy.xp.softaphelper;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
+import android.net.ConnectivityManager;
+import android.net.LinkAddress;
+import android.net.LinkProperties;
+import android.net.Network;
+import android.net.NetworkCapabilities;
 import android.os.Bundle;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
@@ -14,6 +19,8 @@ import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
 
+import java.net.Inet4Address;
+import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -168,6 +175,83 @@ public class ConfigActivity extends Activity {
                 : getString(R.string.band_summary_single, bandName, String.valueOf(channel));
     }
 
+    // ---------------- 网段冲突检查 ----------------
+
+    /**
+     * 检查这个网段会不会和别的网段撞上，撞上就返回给人看的提示，不冲突返回 null。
+     *
+     * <p>查两处：其它共享方式已经配好的网段，以及设备上正在用的网络
+     * （Wi-Fi / 移动数据 / VPN / 正在跑的热点）。前缀冲突会让共享连不上，
+     * Tethering 自己也会拒绝（日志里的 isConflictPrefix），所以这里提前拦。
+     */
+    private String findConflict(String cidr) {
+        for (int type : AppSettings.types()) {
+            if (type == tetheringType) continue;
+            String other = AppSettings.getAddress(this, type);
+            if (CidrUtils.overlaps(cidr, other)) {
+                return getString(R.string.conflict_with_type,
+                        getString(AppSettings.titleRes(type)), other);
+            }
+        }
+
+        // 自己当前在用的网段（正在跑的热点）不算冲突
+        String selfNetwork = CidrUtils.networkCidr(AppSettings.getAddress(this, tetheringType));
+        for (String[] network : currentNetworks()) {
+            if (selfNetwork != null && selfNetwork.equals(CidrUtils.networkCidr(network[1]))) {
+                continue;
+            }
+            if (CidrUtils.overlaps(cidr, network[1])) {
+                return getString(R.string.conflict_with_network, network[0], network[1]);
+            }
+        }
+        return null;
+    }
+
+    /** 设备上当前有 IPv4 地址的网络，返回 {类型名, 地址/前缀}。 */
+    private List<String[]> currentNetworks() {
+        List<String[]> result = new ArrayList<>();
+        try {
+            ConnectivityManager manager =
+                    (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+            if (manager == null) return result;
+            for (Network network : manager.getAllNetworks()) {
+                LinkProperties properties = manager.getLinkProperties(network);
+                if (properties == null) continue;
+                String name = describeNetwork(manager, network, properties);
+                for (LinkAddress linkAddress : properties.getLinkAddresses()) {
+                    InetAddress address = linkAddress.getAddress();
+                    if (!(address instanceof Inet4Address)) continue;
+                    result.add(new String[]{
+                            name, address.getHostAddress() + "/" + linkAddress.getPrefixLength()});
+                }
+            }
+        } catch (Throwable throwable) {
+            // 拿不到就不查了，别因为检查失败保存不了
+        }
+        return result;
+    }
+
+    private String describeNetwork(ConnectivityManager manager, Network network,
+                                   LinkProperties properties) {
+        NetworkCapabilities capabilities = manager.getNetworkCapabilities(network);
+        String iface = properties.getInterfaceName();
+        if (capabilities != null) {
+            if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)) {
+                return getString(R.string.network_vpn);
+            }
+            if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI)) {
+                return getString(R.string.network_wifi);
+            }
+            if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)) {
+                return getString(R.string.network_cellular);
+            }
+            if (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)) {
+                return getString(R.string.network_ethernet);
+            }
+        }
+        return iface == null ? getString(R.string.network_other) : iface;
+    }
+
     // ---------------- 保存 ----------------
 
     private void save() {
@@ -180,6 +264,14 @@ public class ConfigActivity extends Activity {
         }
 
         String normalized = CidrUtils.normalize(input);
+
+        // 防呆：和其它网段重叠就直接拦下来，别等热点起来才发现连不上
+        String conflict = findConflict(normalized);
+        if (conflict != null) {
+            showStatus(conflict, true);
+            return;
+        }
+
         String bandSummary;
         try {
             AppSettings.setAddress(this, tetheringType, normalized);

@@ -27,6 +27,14 @@
     <string name="band_summary_dual">2.4G+5G 自动</string>
 
     <string name="config_footer">注意：不要和其它网络的网段冲突，否则共享会连接失败（日志里会提示 isConflictPrefix）。信道列表是标准信道，设备不支持的信道会导致热点起不来，换一个即可。</string>
+
+    <string name="conflict_with_type">网段冲突：和「%1$s」（%2$s）重叠，请换一个网段</string>
+    <string name="conflict_with_network">网段冲突：和当前%1$s（%2$s）重叠，请换一个网段</string>
+    <string name="network_wifi">Wi-Fi 网络</string>
+    <string name="network_cellular">移动数据</string>
+    <string name="network_vpn">VPN</string>
+    <string name="network_ethernet">有线网络</string>
+    <string name="network_other">网络</string>
     <string name="save">保存</string>
     <string name="saved_and_restarting">已保存：%1$s，正在重启该共享（若它当前是开启的）</string>
     <string name="saved_hint">已保存：%1$s，重新开关一次共享后生效</string>
