@@ -101,6 +101,17 @@ public class MainHook implements IXposedHookLoadPackage {
         }
     }
 
+    /** 界面里把这个共享方式的 IPv6 中继关掉了没有。 */
+    private static boolean isIpv6RelayDisabled(int interfaceType) {
+        try {
+            return preferences().getInt(AppSettings.ipv6RelayKey(interfaceType),
+                    AppSettings.IPV6_RELAY_FOLLOW_SYSTEM) == AppSettings.IPV6_RELAY_DISABLED;
+        } catch (Throwable throwable) {
+            log("[Warning]: [ipv6 relay] " + throwable);
+            return false;
+        }
+    }
+
     /** 用户选了 5G + 自动信道时，把 ACS 锁到 149~165（和文档里承诺的一致）。 */
     private static boolean shouldLock5gAcs() {
         try {
@@ -275,6 +286,52 @@ public class MainHook implements IXposedHookLoadPackage {
                 });
     }
 
+    /**
+     * 关掉 IPv6 中继。
+     *
+     * <p>IpServer 拿这个方法收到的「上游 IPv6-only LinkProperties」构造 RaParams，交给
+     * RouterAdvertisementDaemon 发 RA —— 客户端的全局 IPv6 就是这么来的；IPv6 的转发规则
+     * 也是在这一步按上游前缀下发的。把参数置成 null 就切到「上游没有 IPv6」这条路径：
+     * RA 里不带前缀、不带默认路由，已经发出去过的前缀还会按 lifetime 0 作废，
+     * 转发规则（BPF offload / ip6tables）也一并清掉，客户端只剩 link-local。
+     *
+     * <p>这条路径是 AOSP 自己在用的正常状态，不是硬造出来的中间态：上游 IPv6 掉线时
+     * {@code IPv6TetheringCoordinator.stopIPv6TetheringOn()} 发的就是 null。
+     *
+     * <p>方法名安卓 9~16 没变过，只有参数个数不同（9/10 是 {@code (LinkProperties)}，
+     * 11+ 多一个 {@code ttlAdjustment}），所以按名字找、只改 {@code args[0]} 就够了。
+     */
+    private void hookUpstreamIpv6(final Class<?> klass, String className, String processName) {
+        Method method = ReflectUtils.findMethod(klass, "updateUpstreamIPv6LinkProperties");
+        if (method == null) {
+            log("[Error]: [updateUpstreamIPv6LinkProperties] not found in class " + klass.getName());
+            return;
+        }
+
+        XposedBridge.hookMethod(method, new XC_MethodHook() {
+            @Override
+            protected void beforeHookedMethod(MethodHookParam param) throws Throwable {
+                super.beforeHookedMethod(param);
+                if (param.args.length == 0 || param.args[0] == null) return;
+
+                Field field_mInterfaceType = ReflectUtils.findField(klass, "mInterfaceType");
+                int interfaceType = TETHERING_WIFI;
+                if (field_mInterfaceType == null) {
+                    log("[Warning]: field_mInterfaceType not found, assuming TETHERING_WIFI.");
+                } else {
+                    interfaceType = field_mInterfaceType.getInt(param.thisObject);
+                }
+
+                if (!isIpv6RelayDisabled(interfaceType)) return;
+
+                // 上游本来有 IPv6，这里让它以为没有：不发前缀、不建转发规则
+                param.args[0] = null;
+                log("[Success Edit]: disable IPv6 relay (interfaceType " + interfaceType + ")");
+            }
+        });
+        log("[Success]: [updateUpstreamIPv6LinkProperties] found in " + processName);
+    }
+
     @Override
     public void handleLoadPackage(XC_LoadPackage.LoadPackageParam lpparam) throws Throwable {
         ClassLoader classLoader = lpparam.classLoader;
@@ -338,6 +395,17 @@ public class MainHook implements IXposedHookLoadPackage {
             } catch (Throwable throwable) {
                 log("[Error]: [hook " + methodName + "] in " + lpparam.processName + ": " + throwable);
             }
+        }
+
+        // 关闭 IPv6 中继（安卓 9~16）
+        // 安卓 9 的类名不一样（见上面的 className），方法名各版本都一样
+        try {
+            hookUpstreamIpv6(classLoader.loadClass(className), className, lpparam.processName);
+        } catch (ClassNotFoundException e) {
+            // 和固定IP一样，绝大多数进程里没有 Tethering 的代码，跳过就行
+        } catch (Throwable throwable) {
+            log("[Error]: [hook updateUpstreamIPv6LinkProperties] in "
+                    + lpparam.processName + ": " + throwable);
         }
 
         //固定5G热点信道 (Android 9-11)

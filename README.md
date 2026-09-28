@@ -6,10 +6,13 @@ SoftAp type hide for Android 10-16
 
 SoftAp 5G channel and bandwidth lock for Android 13-16 
 
+SoftAp IPv6 tethering off for Android 9-16
+
 ## 功能
 1. 固定IP地址 (Android 9-16)
 2. 隐藏热点类型 (Android 10-16)
 3. 锁定5G信道和频宽 (Android 13-16)
+4. 关闭IPv6中继 (Android 9-16)
 
 ## 务必先确认作用域（Android 12+ 必看）
 模块的`xposed_init`/`xposedscope`只是**推荐**作用域，**不会自动生效**。
@@ -103,6 +106,46 @@ su -c 'grep ^channel= /data/vendor/wifi/hostapd/hostapd_wlan2.conf'
 ```
 
 `dumpsys wifi` 里的 `frequency=` 是**中心频率**（80MHz 时和主信道不是一回事），别被它误导。
+
+### IPv6 中继
+每个共享方式的配置页里都能配 **IPv6 中继**，两个选项：
+
+- **跟随系统**（默认）= 模块不改写，系统原来怎么下发就怎么下发
+- **关闭** = 不再把上游的 IPv6 前缀下发给客户端
+
+关闭后客户端**只有 IPv4**（IPv6 只剩 link-local），适合 Clash 这类代理不支持 IPv6 的场景——
+否则客户端会自己 SLAAC 出公网 IPv6，绕开代理和规则直连，分流就失效了。
+
+拦的是 `android.net.ip.IpServer#updateUpstreamIPv6LinkProperties`：把传进来的上游 IPv6-only
+`LinkProperties` 换成 `null`，IpServer 就切到「上游没有 IPv6」这条路径（AOSP 自己在上游 IPv6
+掉线时发的也是 `null`，所以不是硬造出来的中间态）：
+
+- RA 里不带前缀、不带默认路由，已经发出去过的前缀还会按 lifetime 0 作废 → 客户端 SLAAC 不出全局地址
+- RDNSS（IPv6 DNS）一并去掉
+- IPv6 转发规则（BPF offload / ip6tables）一起清掉 → 客户端手里就算留着旧地址也过不去
+
+IPv4 完全不受影响。
+
+**注意**：上游是 IPv6-only（464XLAT）时关掉会让客户端没网；除了「跟随系统」没有「强制开启」，
+上游没有 IPv6 时模块也造不出来。
+
+**什么时候才真的有 IPv6 可关**：AOSP 只在上游是**蜂窝网络**时才做 IPv6 中继 ——
+`TetheringInterfaceUtils#allowIpv6Tethering` 只认 `TRANSPORT_CELLULAR` 和 `TRANSPORT_TEST`。
+也就是说用 **Wi-Fi 上游**共享时，客户端本来就拿不到全局 IPv6（平台自己就不中继），
+这时「关闭」是空操作；真正会遇到问题的是**移动数据共享 + 代理不支持 IPv6** 的场景。
+（真机验证时如果没有 SIM，抓不到 `[Success Edit]: disable IPv6 relay` 这行日志是正常的。）
+
+**生效时机**：和网段一样，保存后会重启一次该共享。这一步是必须的——RA daemon 起来后会一直按
+之前 build 好的 `RaParams` 周期发 RA，只改配置不重启，要等上游 IPv6 变化才会重新走到这个 hook。
+
+日志（Tethering 进程里）：
+
+```
+[SoftApHelper] [Success]: [updateUpstreamIPv6LinkProperties] found in com.android.networkstack.tethering
+[SoftApHelper] [Success Edit]: disable IPv6 relay (interfaceType 0)
+```
+
+客户端侧确认：`ip -6 addr`（Windows 是 `ipconfig`）应该只剩 `fe80::` 开头的地址。
 
 ### 保存后自动重启共享
 点保存后，模块会自动把对应的共享**关掉再打开一次**，新网段立刻生效，不用自己去点快捷开关。
@@ -263,6 +306,24 @@ hostapd 拿到的就是指定信道。
 
 手机重启后可能需要手动指定。
 
+
+## 关闭IPv6中继
+### Hook点
+`android.net.ip.IpServer` 的 `updateUpstreamIPv6LinkProperties`（安卓9 是
+`com.android.server.connectivity.tethering.TetherInterfaceStateMachine` 的同名方法，安卓10 在
+`frameworks/base/services/net/java/android/net/ip/IpServer.java`）：
+
+| 版本 | 签名 |
+|------|------|
+| 9 / 10 | `private void updateUpstreamIPv6LinkProperties(LinkProperties v6only)` |
+| 11 ~ 16 | `private void updateUpstreamIPv6LinkProperties(LinkProperties v6only, int ttlAdjustment)` |
+
+方法名安卓9~16 没变过，只有参数个数不同，所以按名字找、把 `args[0]` 置成 `null` 即可，
+不用管参数列表。调用方是 `IPv6TetheringCoordinator`（`CMD_IPV6_TETHER_UPDATE`），
+它在上游 IPv6 掉线时发的本来就是 `null`。
+
+改哪个共享方式由 `mInterfaceType` 决定（各版本都有这个字段，固定IP也在用它），
+配置存在 `ipv6_relay_<type>` 里。
 
 ## 感谢
 [@mmfmkuang](https://github.com/mmfmkuang)

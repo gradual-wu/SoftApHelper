@@ -42,9 +42,19 @@ public class ConfigActivity extends Activity {
             R.string.band_2ghz_5ghz,
     };
 
+    private static final int[] IPV6_RELAY_VALUES = {
+            AppSettings.IPV6_RELAY_FOLLOW_SYSTEM,
+            AppSettings.IPV6_RELAY_DISABLED,
+    };
+    private static final int[] IPV6_RELAY_LABELS = {
+            R.string.ipv6_relay_follow_system,
+            R.string.ipv6_relay_disabled,
+    };
+
     private int tetheringType;
     private EditText addressInput;
     private TextView statusText;
+    private Spinner ipv6RelaySpinner;
 
     private LinearLayout bandGroup;
     private Spinner bandSpinner;
@@ -80,6 +90,35 @@ public class ConfigActivity extends Activity {
         });
 
         setupBandControls();
+        setupIpv6Relay();
+    }
+
+    // ---------------- IPv6 中继（每种共享方式都能配） ----------------
+
+    private void setupIpv6Relay() {
+        ipv6RelaySpinner = findViewById(R.id.ipv6_relay_spinner);
+
+        List<String> labels = new ArrayList<>();
+        for (int res : IPV6_RELAY_LABELS) labels.add(getString(res));
+        ipv6RelaySpinner.setAdapter(new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_dropdown_item, labels));
+        ipv6RelaySpinner.setSelection(
+                indexOfIpv6Relay(AppSettings.getIpv6Relay(this, tetheringType)));
+    }
+
+    private static int indexOfIpv6Relay(int mode) {
+        for (int i = 0; i < IPV6_RELAY_VALUES.length; i++) {
+            if (IPV6_RELAY_VALUES[i] == mode) return i;
+        }
+        return 0;
+    }
+
+    /** 保存 IPv6 中继设置，返回给人看的摘要（跟随系统返回 null）。 */
+    private String saveIpv6Relay() {
+        int mode = IPV6_RELAY_VALUES[ipv6RelaySpinner.getSelectedItemPosition()];
+        AppSettings.setIpv6Relay(this, tetheringType, mode);
+        return mode == AppSettings.IPV6_RELAY_DISABLED
+                ? getString(R.string.ipv6_relay_summary_disabled) : null;
     }
 
     // ---------------- 频段 / 信道（只有 WiFi 热点有） ----------------
@@ -273,9 +312,11 @@ public class ConfigActivity extends Activity {
         }
 
         String bandSummary;
+        String ipv6Summary;
         try {
             AppSettings.setAddress(this, tetheringType, normalized);
             bandSummary = saveBandSettings();
+            ipv6Summary = saveIpv6Relay();
         } catch (Throwable throwable) {
             showStatus("保存失败：" + throwable, true);
             return;
@@ -284,7 +325,10 @@ public class ConfigActivity extends Activity {
         addressInput.setText(normalized);
         hideKeyboard();
 
-        String summary = bandSummary == null ? normalized : normalized + "，" + bandSummary;
+        StringBuilder summaryBuilder = new StringBuilder(normalized);
+        if (bandSummary != null) summaryBuilder.append("，").append(bandSummary);
+        if (ipv6Summary != null) summaryBuilder.append("，").append(ipv6Summary);
+        String summary = summaryBuilder.toString();
 
         // 请 system_server 里的模块代码把对应的共享关掉再打开一次，新配置立刻生效
         if (requestRestart()) {

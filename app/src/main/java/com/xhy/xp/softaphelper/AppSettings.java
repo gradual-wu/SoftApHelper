@@ -42,9 +42,14 @@ public class AppSettings {
     /** 信道：0 表示自动（由系统 ACS 选，5G 会自动锁到 149~165）。 */
     public static final int CHANNEL_AUTO = 0;
 
+    /** IPv6 中继：跟随系统（默认，不改写）/ 关闭（不下发 IPv6，客户端只剩 IPv4）。 */
+    public static final int IPV6_RELAY_FOLLOW_SYSTEM = 0;
+    public static final int IPV6_RELAY_DISABLED = 1;
+
     private static final String KEY_PREFIX = "address_";
     public static final String KEY_WIFI_BAND = "wifi_band";
     public static final String KEY_WIFI_CHANNEL = "wifi_channel";
+    private static final String KEY_IPV6_RELAY_PREFIX = "ipv6_relay_";
 
     private static final int[] CHANNELS_2GHZ = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13};
     private static final int[] CHANNELS_5GHZ = {
@@ -144,6 +149,24 @@ public class AppSettings {
 
     public static void setWifiChannel(Context context, int channel) {
         preferences(context).edit().putInt(KEY_WIFI_CHANNEL, channel).apply();
+    }
+
+    // ---------------- IPv6 中继 ----------------
+
+    public static int getIpv6Relay(Context context, int type) {
+        try {
+            return preferences(context).getInt(ipv6RelayKey(type), IPV6_RELAY_FOLLOW_SYSTEM);
+        } catch (Throwable ignored) {
+            return IPV6_RELAY_FOLLOW_SYSTEM;
+        }
+    }
+
+    public static void setIpv6Relay(Context context, int type, int mode) {
+        preferences(context).edit().putInt(ipv6RelayKey(type), mode).apply();
+    }
+
+    public static String ipv6RelayKey(int type) {
+        return KEY_IPV6_RELAY_PREFIX + type;
     }
 
     /** 某个频段可选的信道；双频/跟随系统没有可选信道。 */
