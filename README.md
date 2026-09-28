@@ -1,15 +1,36 @@
 # SoftApHelper (Xposed)
 
-SoftAp static server IP(v4) for Android 9+
+SoftAp static server IP(v4) for Android 9-16
 
-SoftAp type hide for Android 10+
+SoftAp type hide for Android 10-16
 
-SoftAp 5G channel and bandwidth lock for Android 13+ 
+SoftAp 5G channel and bandwidth lock for Android 13-16 
 
 ## 功能
-1. 固定IP地址 (Android 9+)
-2. 隐藏热点类型 (Android 10+)
-3. 锁定5G信道和频宽 (Android 13+)
+1. 固定IP地址 (Android 9-16)
+2. 隐藏热点类型 (Android 10-16)
+3. 锁定5G信道和频宽 (Android 13-16)
+
+## 务必先确认作用域（Android 12+ 必看）
+模块的`xposed_init`/`xposedscope`只是**推荐**作用域，**不会自动生效**。
+
+部分框架（例如 `Vector`）只把推荐作用域显示在选择列表里，需要你自己勾选并保存：
+
+`LSPosed/Vector` - 模块 - SoftApHelper - **作用域** - 勾选：
+
+- **系统框架**（`system`）
+- **`com.android.networkstack.tethering`**
+
+保存后**重启手机**（作用域要重启才生效）。
+
+作用域为空时模块不会加载到任何相关进程，表现为**完全没效果**，而且日志里不会有任何 `SoftApHelper` 记录。
+
+自检方法：重启后在 LSPosed/Vector 日志里搜索 `SoftApHelper`，正常应能看到
+
+```
+[SoftApHelper] [Success]: [requestIpv4Address] found in com.android.networkstack
+[SoftApHelper] [Success Edit]:192.168.43.1/24
+```
 
 ## 安卓14已知问题：
 部分安卓14系统由于存在缓存，需要手动**重新优化Tethering**，模块才能生效
@@ -21,28 +42,80 @@ LSPosed-模块-SoftApHelper-长按Tethering-重新优化-重启手机
 ## 注意
 **网络前缀冲突**会导致网络连接失败（`Android 10`及以下）或仍使用随机IP（`Android 11`及以上，日志提示`isConflictPrefix`）。
 
-wifi热点为`192.168.43.1`，同时提供了`192.168.1.1`版本（`43.1`**连不上的先试试这个**）。
+支持设置`WIFI`、`USB`、`蓝牙`、`P2P`、`以太网`的热点IP（`Android 11`及以上），网段可以在**模块界面**里直接改，见下面的[配置网段](#配置网段)。
 
-支持设置`WIFI`、`USB`、`蓝牙`的热点IP（`Android 11`及以上）。
-
+默认值：
 
 | Type      | IP                             |
 |-----------|--------------------------------|
-| USB       | 192.168.42.1                   |
-| WIFI      | WIFI_HOST_IFACE_ADDR(43.1/1.1) |
-| BlueTooth | 192.168.44.1                   |
-| P2P       | 192.168.49.1                   |
-| ETHERNET  | 192.168.45.1                   |
+| USB       | 192.168.42.1/24                |
+| WIFI      | 192.168.43.1/24                |
+| BlueTooth | 192.168.44.1/24                |
+| P2P       | 192.168.49.1/24                |
+| ETHERNET  | 192.168.45.1/24                |
+
+`43.1`**连不上的可以在界面里改成 `192.168.1.1/24` 试试**。
 
 安卓13+开启5G热点时，如果未指定5G信道(未指定单个channel或者使用allowedAcsChannels)，模块将锁定频段为`149,153,157,161,165`，最大频宽为`320MHZ`(受硬件限制，实际可能只有`80MHZ`)。
 
 如果需要锁定频段为其他范围（比如`36,40,44`），请使用[VPNHotspot](https://github.com/Mygod/VPNHotspot)，填写`5 GHz ACS 可选频段`。
 
+## 配置网段
+模块界面（LSPosed/Vector 里点开模块，或桌面上有图标的话直接打开）里，每个共享方式一个按钮，点进去填「本机地址/前缀长度」再保存：
+
+```
+选择要配置的共享方式
+  WiFi 热点配置        192.168.43.1/24
+  USB 共享网络配置      192.168.42.1/24
+  蓝牙共享网络配置      192.168.44.1/24
+  WiFi P2P 配置        192.168.49.1/24
+  以太网共享配置        192.168.45.1/24
+```
+
+规则：
+
+- 格式是 `地址/前缀长度`，例如 `192.168.43.1/24`；只填 IP 时按 `/24` 处理
+- 填的是**共享后本机自己的地址**（对端看到的网关），不是网段号；`192.168.43.0/24` 这种网络地址和广播地址会被拒绝
+- 前缀长度 1~30
+- 配置存在模块的 SharedPreferences 里（框架的 `xposedsharedprefs` 机制），所以 manifest 里必须有 `<meta-data android:name="xposedsharedprefs" android:value="true"/>`
+
+### WiFi 热点的频段和信道
+WiFi 热点配置页里还能选**频段**（跟随系统 / 2.4G / 5G / 2.4G+5G）和**信道**：
+
+- 选单频段（2.4G 或 5G）时热点只开这个频段，信道下拉框生效，可以从该频段的标准信道里选一个，也可以选「自动」交给系统挑
+- 选 2.4G+5G 时由系统在双频之间自己选信道，信道下拉框会置灰
+- 「跟随系统」= 模块不改写，保持系统原来的行为（默认值）
+
+实现上改的是 `SoftApConfiguration` 的 `channels` 参数。注意 **`SoftApConfiguration` 构造一次后会被
+`WifiApConfigStore` 缓存复用**，所以只改构造函数参数在「用户改完配置、重开热点」时不生效，
+必须同时 hook `getChannels()` —— Wi-Fi 模块在 `HostapdHalAidlImp.prepareNetworkParams` 里正是
+通过这个 getter 拿频段/信道的（`band = config.getChannels().keyAt(i)`）。
+
+验证办法：开完热点后看 hostapd 的实际配置
+
+```bash
+su -c 'grep ^channel= /data/vendor/wifi/hostapd/hostapd_wlan2.conf'
+```
+
+`dumpsys wifi` 里的 `frequency=` 是**中心频率**（80MHz 时和主信道不是一回事），别被它误导。
+
+### 保存后自动重启共享
+点保存后，模块会自动把对应的共享**关掉再打开一次**，新网段立刻生效，不用自己去点快捷开关。
+
+- 只有当前**正在共享**的类型才会重启；没在开启的直接跳过，下次开启时就是新网段
+- 实现：界面发一条带 signature 权限保护的广播，system_server 里的模块代码收到后调
+  `TetheringManager.stopTethering/startTethering`（公开 API，Android 14+）
+- 停止后等 2.5 秒再启动：Wi-Fi 关 AP 是异步的，立刻启动会撞上 Wi-Fi 模块的
+  "Tethering is already active or activating"，最终返回 `TETHER_ERROR_INTERNAL_ERROR(5)`；
+  启动失败会自动重试，最多 4 次
+- **需要作用域勾选「系统框架」**，因为这段代码跑在 system_server 里；没勾就退化成"需要手动开关一次"
+- 重启共享会让已连接设备短暂断开（约 5 秒）
+
 ## 下载
 [Release](https://github.com/XhyEax/SoftApHelper/releases)
 
 ## 作用域
-推荐使用`LSPosed`指定作用域（已配置推荐作用域）
+**推荐作用域需要手动勾选**（LSPosed/Vector 都不会自动应用，详见文首说明）。
 ### 安卓11及以下
 系统框架
 
@@ -67,9 +140,9 @@ wifi热点为`192.168.43.1`，同时提供了`192.168.1.1`版本（`43.1`**连�
 若仍未生效，请上传设备执行`ifconfig`的结果，以及`/apex/com.android.tethering/priv-app/`下的apk到[Issues](https://github.com/XhyEax/SoftApHelper/issues)。
 
 ## 关于热点IP自定义
-由于涉及配置保存，需要适配不同的安卓系统版本(系统层面限制)以及Xposed版本(API)，时间成本较高，该功能暂不考虑开发。
-
-解决方法：自行使用MT管理器重编译dex，把192.168.43.1替换成目标IP
+已实现：见上面的[配置网段](#配置网段)，在模块界面里改，存在模块自己的 SharedPreferences 里，
+hook 侧用 `XSharedPreferences` 读（依赖框架的 `xposedsharedprefs` 机制，工作方式是把模块的
+`getPreferencesDir()` 重定向到框架目录，所以界面进程和系统进程看到的是同一份文件）。
 
 ## 原理
 [安卓9 固定Wifi热点IP (Xposed)](https://blog.xhyeax.com/2021/03/01/android-9-set-hotpot-ip/)
@@ -130,6 +203,18 @@ Hook点同安卓12（参数有变化，但函数名没变）
 private LinkAddress requestIpv4Address(final int scope, final boolean useLastAddress)
 ```
 
+### 安卓15 / 安卓16
+Hook点同安卓14，函数名和参数都没变，`configureIPv4`也没有被R8内联：
+
+```java
+private LinkAddress requestIpv4Address(final int scope, final boolean useLastAddress)
+private boolean configureIPv4(boolean enabled, int scope)
+```
+
+安卓16 的变化只在内部实现：`IpServer` 不再持有 `PrivateAddressCoordinator`（地址改由 `RoutingCoordinator`/`ConnectivityService` 分配），因此取不到该字段时模块直接跳过前缀冲突检查；`mInterfaceType` 字段仍然存在。
+
+若在 Android 16 上无效，先确认作用域（见文首），再看日志里有没有上面的 `[Success]` 行。
+
 ## 隐藏热点类型
 `android.net.dhcp.DhcpServingParamsParcelExt`的`setMetered`函数。
 
@@ -153,6 +238,16 @@ Hook点同安卓14
 （TODO）安卓12及以下：指定AP频段为特定信道。
 
 安卓13+：如果开启5G热点时，未指定5G信道(单个channel或者allowedAcsChannels)，锁定频段为`149,153,157,161,165`，频宽为`320MHZ`(受硬件限制，实际可能只有`80MHZ`)。
+
+**已知限制**：模块按 `SoftApConfiguration.getChannels()` 里是否存在 `BAND_5GHZ` 这个 key 来判断是否锁5G。
+部分系统（例如双频`2.4G+5G 自动`）写入的是合并后的 key（`BAND_2GHZ|BAND_5GHZ = 3`，
+`dumpsys wifi` 里显示 `Channels = {3=0}`），此时 key 不等于 `BAND_5GHZ`，模块不会改写 ACS 频段。
+
+**更关键的限制**：这套「锁 ACS 频段」依赖 ROM 打开 ACS offload（`config_wifi_softap_acs_supported`）。
+很多 ROM（例如 OnePlus 8T 的 LineageOS 23）这个值是 `false`，框架压根不会把允许的信道列表传给 hostapd，
+hostapd 收到的是 `channel=0` 自己选。这种情况下任何"锁 149~165"的做法都不可能生效——**想固定信道，
+直接在模块界面里选频段+信道**（见下面的配置网段），模块会改写 `SoftApConfiguration.getChannels()`，
+hostapd 拿到的就是指定信道。
 
 ### 方法2：使用VPNHotspot
 使用[VPNHotspot](https://github.com/Mygod/VPNHotspot)设置系统热点配置。

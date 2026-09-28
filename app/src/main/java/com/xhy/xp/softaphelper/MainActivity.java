@@ -1,53 +1,78 @@
 package com.xhy.xp.softaphelper;
 
 import android.app.Activity;
-import android.content.pm.PackageManager;
-import android.os.Build;
+import android.content.Intent;
+import android.graphics.Color;
 import android.os.Bundle;
-import android.widget.TextView;
+import android.text.SpannableString;
+import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.RelativeSizeSpan;
+import android.view.View;
+import android.widget.Button;
+import android.widget.LinearLayout;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-
+/** 主界面：每个共享方式一个按钮，点进去配置该方式的网段。 */
 public class MainActivity extends Activity {
+
+    private LinearLayout buttonContainer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        ArrayList<String> pkgNameList = new ArrayList<>(
-                Arrays.asList(
-                        "com.android.networkstack.tethering.inprocess",
-                        "com.android.networkstack.tethering",
-                        "com.google.android.networkstack.tethering.inprocess",
-                        "com.google.android.networkstack.tethering"
-                ));
+        buttonContainer = findViewById(R.id.config_buttons);
+    }
 
-        StringBuilder sb = new StringBuilder("Installed App (if not found, select android):\n");
-        for (String pkgName : pkgNameList) {
-            if (isInstalled(pkgName)) {
-                sb.append(pkgName);
+    @Override
+    protected void onResume() {
+        super.onResume();
+        // 从配置界面返回时刷新按钮上的当前值
+        rebuildButtons();
+    }
+
+    private void rebuildButtons() {
+        buttonContainer.removeAllViews();
+        for (final int type : AppSettings.types()) {
+            buttonContainer.addView(createButton(type), buttonLayoutParams());
+        }
+    }
+
+    private Button createButton(final int type) {
+        Button button = new Button(this);
+        button.setAllCaps(false);
+        button.setText(buildButtonText(type));
+        button.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                Intent intent = new Intent(MainActivity.this, ConfigActivity.class);
+                intent.putExtra(ConfigActivity.EXTRA_TETHERING_TYPE, type);
+                startActivity(intent);
             }
-        }
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S_V2){
-            sb.append("5G channel and bandwidth lock enabled!");
-        }else{
-            sb.append("Tips: 5G channel and bandwidth lock for Android 13+ only");
-        }
-
-        TextView textView = findViewById(R.id.sample_text);
-        textView.setText(sb.toString());
+        });
+        return button;
     }
 
-    public boolean isInstalled(String pkgName) {
-        PackageManager packageManager = this.getApplicationContext().getPackageManager();
-        try {
-            packageManager.getApplicationInfo(pkgName, PackageManager.GET_UNINSTALLED_PACKAGES);
-        } catch (PackageManager.NameNotFoundException e) {
-            return false;
-        }
-        return true;
+    /** 按钮上是两行：第一行是名字，第二行小一号、灰色，显示当前网段。 */
+    private SpannableString buildButtonText(int type) {
+        String title = getString(AppSettings.titleRes(type));
+        String address = AppSettings.getAddress(this, type);
+        String text = title + "\n" + address;
+        SpannableString spannable = new SpannableString(text);
+        int start = title.length() + 1;
+        spannable.setSpan(new RelativeSizeSpan(0.8f), start, text.length(),
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        spannable.setSpan(new ForegroundColorSpan(Color.GRAY), start, text.length(),
+                Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return spannable;
     }
 
+    private LinearLayout.LayoutParams buttonLayoutParams() {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        int margin = (int) (getResources().getDisplayMetrics().density * 6);
+        params.setMargins(0, margin, 0, margin);
+        return params;
+    }
 }

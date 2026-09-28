@@ -1,6 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 保存网段后自动重启共享要用到：只有本模块（同一签名）能发这条广播 -->
+    <permission
+        android:name="com.xhy.xp.softaphelper.permission.RESTART_TETHERING"
+        android:protectionLevel="signature" />
+
+    <uses-permission android:name="com.xhy.xp.softaphelper.permission.RESTART_TETHERING" />
+
     <queries>
         <package android:name="com.android.networkstack.tethering.inprocess" />
         <package android:name="com.android.networkstack.tethering" />
@@ -24,6 +31,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".ConfigActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity" />
+
         <meta-data
             android:name="xposedscope"
             android:resource="@array/xposed_scope" />
@@ -36,6 +48,11 @@
         <meta-data
             android:name="xposedminversion"
             android:value="82" />
+        <!-- 作用域进程要读界面保存的网段配置，必须声明这个，框架才会把模块自身的
+             SharedPreferences 目录重定向到框架目录（Android 7+ 的 MODE_WORLD_READABLE 需要） -->
+        <meta-data
+            android:name="xposedsharedprefs"
+            android:value="true" />
     </application>
 
 </manifest>

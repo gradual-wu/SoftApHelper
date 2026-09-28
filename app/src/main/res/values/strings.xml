@@ -1,3 +1,33 @@
 <resources>
     <string name="app_name">SoftApHelper</string>
+
+    <string name="main_title">选择要配置的共享方式</string>
+    <string name="main_hint">保存后模块会自动把对应的共享关掉再打开一次，新网段立即生效（该共享没开启时会跳过，下次开启生效）。\n若模块没生效，先确认作用域已勾选「系统框架」和「com.android.networkstack.tethering」。</string>
+
+    <string name="config_wifi">WiFi 热点配置</string>
+    <string name="config_usb">USB 共享网络配置</string>
+    <string name="config_bluetooth">蓝牙共享网络配置</string>
+    <string name="config_wifi_p2p">WiFi P2P 配置</string>
+    <string name="config_ethernet">以太网共享配置</string>
+
+    <string name="config_label_address">网段（本机地址 / 前缀长度）</string>
+    <string name="config_hint">例如 %1$s；只填 IP 时按 /24 处理。这个地址就是共享后本机的网关地址。</string>
+
+    <string name="config_label_band">频段</string>
+    <string name="config_label_channel">信道</string>
+    <string name="band_follow_system">跟随系统（默认，不改写）</string>
+    <string name="band_2ghz">2.4G</string>
+    <string name="band_5ghz">5G</string>
+    <string name="band_2ghz_5ghz">2.4G+5G</string>
+    <string name="channel_auto">自动</string>
+    <string name="band_hint_single">选了 %1$s 后热点只开这个频段。信道选「自动」= 交给系统挑；要固定信道请在下面选具体信道。</string>
+    <string name="band_hint_multi">%1$s 由系统自动在双频之间选信道，不能指定。需要固定信道请选单频段（2.4G 或 5G）。</string>
+    <string name="band_summary_single">%1$s 信道 %2$s</string>
+    <string name="band_summary_auto">%1$s 自动</string>
+    <string name="band_summary_dual">2.4G+5G 自动</string>
+
+    <string name="config_footer">注意：不要和其它网络的网段冲突，否则共享会连接失败（日志里会提示 isConflictPrefix）。信道列表是标准信道，设备不支持的信道会导致热点起不来，换一个即可。</string>
+    <string name="save">保存</string>
+    <string name="saved_and_restarting">已保存：%1$s，正在重启该共享（若它当前是开启的）</string>
+    <string name="saved_hint">已保存：%1$s，重新开关一次共享后生效</string>
 </resources>
